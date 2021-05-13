@@ -1,0 +1,61 @@
+# docker-compose.yml
+version: '3'
+
+networks:
+  db_network:
+    driver: bridge 
+  sender:
+    driver: bridge 
+
+volumes:
+  postgres_volume:
+
+services:
+
+    db:
+        container_name: pg
+        image: postgres:alpine
+        restart: always
+        env_file:
+         - ./db/database.conf
+        ports:
+         - 5433:5432
+        volumes:
+          - ./db/pgdata:/var/lib/postgresql/data
+          - ./db/scripts/:/docker-entrypoint-initdb.d/
+        networks:
+          - db_network    
+
+    manager:
+        container_name: man
+        image: teilon/mng-countries
+        ports:
+          - "8001:8001"
+        env_file:
+          - ./db/database.conf
+        environment:
+          - POSTGRES_HOST=db
+          - POSTGRES_PORT=5432
+        depends_on:
+          - db
+        networks:
+          - db_network
+          - sender
+
+    scraper:
+        container_name: scr
+        image: teilon/scr-countries
+        ports:
+          - "5081:5081"
+        environment:
+          - MANAGER_HOST=manager:8001
+          - TZ=Asia/Almaty
+          - FLASK_APP=server/server.py
+          - FLASK_DEBUG=1
+          - 'RUN=flask run --host=0.0.0.0 --port=5081'
+        command: flask run --host=0.0.0.0 --port=5081
+        depends_on:
+            - manager
+        networks:
+            - sender
+
